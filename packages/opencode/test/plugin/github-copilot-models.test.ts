@@ -1,4 +1,5 @@
 import { afterEach, expect, mock, test } from "bun:test"
+import { InstallationVersion } from "@opencode-ai/core/installation/version"
 import { CopilotModels } from "@/plugin/github-copilot/models"
 import { CopilotAuthPlugin } from "@/plugin/github-copilot/copilot"
 
@@ -258,4 +259,101 @@ test("remaps fallback oauth model urls to the enterprise host", async () => {
 
   expect(models.claude.api.url).toBe("https://copilot-api.ghe.example.com")
   expect(models.claude.api.npm).toBe("@ai-sdk/github-copilot")
+})
+
+test("reads the copilot user agent name from provider settings", async () => {
+  const calls: { url: string; headers: Headers }[] = []
+  globalThis.fetch = mock((input: RequestInfo | URL, init?: RequestInit) => {
+    const url = input instanceof Request ? input.url : input instanceof URL ? input.href : String(input)
+    calls.push({ url, headers: new Headers(init?.headers) })
+
+    if (url.includes("/models")) {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            data: [
+              {
+                model_picker_enabled: true,
+                id: "gpt-4o",
+                name: "GPT-4o",
+                version: "gpt-4o-2024-05-13",
+                capabilities: {
+                  family: "gpt",
+                  limits: {
+                    max_context_window_tokens: 64000,
+                    max_output_tokens: 16384,
+                    max_prompt_tokens: 64000,
+                  },
+                  supports: {
+                    streaming: true,
+                    tool_calls: true,
+                  },
+                },
+              },
+            ],
+          }),
+          { status: 200 },
+        ),
+      )
+    }
+
+    return Promise.resolve(new Response("{}", { status: 200 }))
+  }) as unknown as typeof fetch
+
+  const hooks = await CopilotAuthPlugin({
+    client: {} as never,
+    project: {} as never,
+    directory: "",
+    worktree: "",
+    experimental_workspace: {
+      register() {},
+    },
+    serverUrl: new URL("https://example.com"),
+    $: {} as never,
+  })
+
+  await hooks.config?.({
+    provider: {
+      "github-copilot": {
+        options: {
+          userAgentName: "AcmeCode",
+        },
+      },
+    },
+  } as never)
+
+  await hooks.provider!.models!(
+    {
+      id: "github-copilot",
+      models: {},
+    } as never,
+    {
+      auth: {
+        type: "oauth",
+        refresh: "refresh-token",
+        access: "access-token",
+        expires: Date.now() + 60_000,
+      } as never,
+    },
+  )
+
+  const auth = await hooks.auth!.loader!(
+    async () =>
+      ({
+        type: "oauth",
+        refresh: "refresh-token",
+        access: "access-token",
+        expires: Date.now() + 60_000,
+      }) as never,
+    {} as never,
+  )
+
+  await auth.fetch!(new Request("https://example.com/chat/completions"), {
+    headers: { "x-keep": "yes" },
+  })
+
+  expect(calls).toHaveLength(2)
+  expect(calls[0].headers.get("user-agent")).toBe(`AcmeCode/${InstallationVersion}`)
+  expect(calls[1].headers.get("user-agent")).toBe(`AcmeCode/${InstallationVersion}`)
+  expect(calls[1].headers.get("x-keep")).toBe("yes")
 })

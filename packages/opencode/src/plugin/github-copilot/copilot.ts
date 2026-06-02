@@ -13,6 +13,8 @@ const CLIENT_ID = "Ov23li8tweQw6odWQebz"
 // Add a small safety buffer when polling to avoid hitting the server
 // slightly too early due to clock skew / timer drift.
 const OAUTH_POLLING_SAFETY_MARGIN_MS = 3000 // 3 seconds
+const DEFAULT_USER_AGENT_NAME = "opencode"
+
 function normalizeDomain(url: string) {
   return url.replace(/^https?:\/\//, "").replace(/\/$/, "")
 }
@@ -54,9 +56,20 @@ function fix(model: Model, url: string): Model {
   }
 }
 
+function userAgentHeader(name: string) {
+  return `${name}/${InstallationVersion}`
+}
+
 export async function CopilotAuthPlugin(input: PluginInput): Promise<Hooks> {
   const sdk = input.client
+  let userAgentName = DEFAULT_USER_AGENT_NAME
+
+  const userAgent = () => userAgentHeader(userAgentName)
+
   return {
+    config: (cfg) => {
+      userAgentName = cfg.provider?.["github-copilot"]?.options?.userAgentName?.trim() || DEFAULT_USER_AGENT_NAME
+    },
     provider: {
       id: "github-copilot",
       async models(provider, ctx) {
@@ -70,7 +83,7 @@ export async function CopilotAuthPlugin(input: PluginInput): Promise<Hooks> {
           base(auth.enterpriseUrl),
           {
             Authorization: `Bearer ${auth.refresh}`,
-            "User-Agent": `opencode/${InstallationVersion}`,
+            "User-Agent": userAgent(),
           },
           provider.models,
         ).catch((error) => {
@@ -150,7 +163,7 @@ export async function CopilotAuthPlugin(input: PluginInput): Promise<Hooks> {
             const headers: Record<string, string> = {
               "x-initiator": isAgent ? "agent" : "user",
               ...(init?.headers as Record<string, string>),
-              "User-Agent": `opencode/${InstallationVersion}`,
+              "User-Agent": userAgent(),
               Authorization: `Bearer ${info.refresh}`,
               "Openai-Intent": "conversation-edits",
             }
@@ -226,7 +239,7 @@ export async function CopilotAuthPlugin(input: PluginInput): Promise<Hooks> {
               headers: {
                 Accept: "application/json",
                 "Content-Type": "application/json",
-                "User-Agent": `opencode/${InstallationVersion}`,
+                "User-Agent": userAgent(),
               },
               body: JSON.stringify({
                 client_id: CLIENT_ID,
@@ -256,7 +269,7 @@ export async function CopilotAuthPlugin(input: PluginInput): Promise<Hooks> {
                     headers: {
                       Accept: "application/json",
                       "Content-Type": "application/json",
-                      "User-Agent": `opencode/${InstallationVersion}`,
+                      "User-Agent": userAgent(),
                     },
                     body: JSON.stringify({
                       client_id: CLIENT_ID,

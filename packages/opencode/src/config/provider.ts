@@ -84,6 +84,9 @@ export const Info = Schema.Struct({
         enterpriseUrl: Schema.optional(Schema.String).annotate({
           description: "GitHub Enterprise URL for copilot authentication",
         }),
+        userAgentName: Schema.optional(Schema.String).annotate({
+          description: "User-Agent product name for GitHub Copilot requests (default: opencode)",
+        }),
         setCacheKey: Schema.optional(Schema.Boolean).annotate({
           description: "Enable promptCacheKey for this provider (default false)",
         }),

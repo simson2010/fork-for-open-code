@@ -1539,6 +1539,8 @@ export const layer = Layer.effect(
         })
         const provider = s.providers[model.providerID]
         const options = { ...provider.options }
+        // Copilot branding is consumed by the auth plugin, not the SDK factory.
+        delete options.userAgentName
 
         if (
           model.providerID === "google-vertex" &&
